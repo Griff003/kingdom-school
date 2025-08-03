@@ -2,24 +2,27 @@
 #include <ESP8266WebServer.h>
 #include <Servo.h>
 #include <DHT.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 
 // ==== WiFi AP Mode ====
 const char* ssid = "SmartFarm";
-const char* password = "";
+const char* password = "12345678";
 
 ESP8266WebServer server(80);
 
 // ==== Pin Definitions ====
 #define MOISTURE_PIN A0
-#define PUMP_PIN D4
-#define LDR1_PIN D1
-#define LDR2_PIN D2
+#define PUMP_PIN D2
+#define LDR1_PIN D7
+#define LDR2_PIN D6
 #define SERVO_PIN D8
 #define DHTPIN D5
 #define DHTTYPE DHT11
 
 Servo servo;
 DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 int ldr1Val, ldr2Val;
 int moistureRaw;
@@ -38,6 +41,8 @@ String translate(String key) {
     if (key == "pump_status") return "Hali ya Pampu";
     if (key == "on") return "WASH";
     if (key == "off") return "ZIMWA";
+    if (key == "ldr1") return "Thamani ya LDR1";
+    if (key == "ldr2") return "Thamani ya LDR2";
     if (key == "tips") return "Vidokezo vya Mkoa";
     if (key == "food_security") return "Habari ya Usalama wa Chakula";
     if (key == "food_update") return "Kenya inakumbwa na upungufu wa chakula kutokana na mvua zisizoeleweka, uhifadhi duni na uharibifu wa ardhi.";
@@ -51,6 +56,8 @@ String translate(String key) {
     if (key == "pump_status") return "Tije mar Pump";
     if (key == "on") return "OTING'O";
     if (key == "off") return "OTEL";
+    if (key == "ldr1") return "LDR1 Value";
+    if (key == "ldr2") return "LDR2 Value";
     if (key == "tips") return "Tije mag Region";
     if (key == "food_security") return "Neno mar Chakruok";
     if (key == "food_update") return "Kenya ni gi puonj mar chakruok nikech koth ma ok olo, ketho piny gi tich mar chal.";
@@ -64,6 +71,8 @@ String translate(String key) {
     if (key == "pump_status") return "Mwena wa Pampo";
     if (key == "on") return "IRÎE";
     if (key == "off") return "GÛCOKIA";
+    if (key == "ldr1") return "Thagithia LDR1";
+    if (key == "ldr2") return "Thagithia LDR2";
     if (key == "tips") return "Mwarîria wa Gîthomo";
     if (key == "food_security") return "Ûhoro wa Mûno";
     if (key == "food_update") return "Kenya ĩkûrîa na ûhoro wa mûno nîkûgûria kûgûa kwa mvura na kûnyita gûtogoria wa gûtwara.";
@@ -77,13 +86,28 @@ String translate(String key) {
     if (key == "pump_status") return "Ngotutik Pump";
     if (key == "on") return "TUN";
     if (key == "off") return "CHEK";
+    if (key == "ldr1") return "LDR1 Value";
+    if (key == "ldr2") return "LDR2 Value";
     if (key == "tips") return "Chitoitab Region";
     if (key == "food_security") return "Tililap Komek";
     if (key == "food_update") return "Kenya ko amwae ngotutik che kiboisio konget ak storotet nebo chi ne muto.";
     if (key == "tip_text") return "🔹 Western Kenya: Kaset maize March ak sorghum October.<br>🔹 Coastal Kenya: Kapse cassava ak coconut April to June.<br>🔹 Central Kenya: Potatoes ak coffee March to July.<br>🔹 Rift Valley: Wheat ak barley May to September.";
   }
-  if (key == "tip_text") return "🔹 Western Kenya: Plant maize in March and sorghum in October.<br>🔹 Coastal Kenya: Ideal for cassava and coconut between April and June.<br>🔹 Central Kenya: Best time for potatoes and coffee is between March and July.<br>🔹 Rift Valley: Wheat and barley thrive from May to September.";
+  // Default English translations
+  if (key == "ldr1") return "LDR1 Value";
+  if (key == "ldr2") return "LDR2 Value";
+  if (key == "title") return "Kingdom International SmartFarm";
+  if (key == "sensor_readings") return "Sensor Readings";
+  if (key == "soil_moisture") return "Soil Moisture";
+  if (key == "temperature") return "Temperature";
+  if (key == "humidity") return "Humidity";
+  if (key == "pump_status") return "Pump Status";
+  if (key == "on") return "ON";
+  if (key == "off") return "OFF";
+  if (key == "tips") return "Region Tips";
+  if (key == "food_security") return "Food Security";
   if (key == "food_update") return "Kenya is facing food shortages due to erratic rains, poor storage, and land degradation.";
+  if (key == "tip_text") return "🔹 Western Kenya: Plant maize in March and sorghum in October.<br>🔹 Coastal Kenya: Ideal for cassava and coconut between April and June.<br>🔹 Central Kenya: Best time for potatoes and coffee is between March and July.<br>🔹 Rift Valley: Wheat and barley thrive from May to September.";
   return key;
 }
 
@@ -100,17 +124,19 @@ void handleRoot() {
   html += "<h1>🌱 " + translate("title") + "</h1>";
 
   html += "<form><label>Language:</label> <select name='lang' onchange='this.form.submit()'>";
-  html += String("<option value='en'") + (language=="en"?" selected":"") + ">English</option>";
-  html += String("<option value='sw'") + (language=="sw"?" selected":"") + ">Kiswahili</option>";
-  html += String("<option value='luo'") + (language=="luo"?" selected":"") + ">Luo</option>";
-  html += String("<option value='kikuyu'") + (language=="kikuyu"?" selected":"") + ">Kikuyu</option>";
-  html += String("<option value='kalenjin'") + (language=="kalenjin"?" selected":"") + ">Kalenjin</option></select></form>";
+  html += String("<option value='en'") + (language == "en" ? " selected" : "") + ">English</option>";
+  html += String("<option value='sw'") + (language == "sw" ? " selected" : "") + ">Kiswahili</option>";
+  html += String("<option value='luo'") + (language == "luo" ? " selected" : "") + ">Luo</option>";
+  html += String("<option value='kikuyu'") + (language == "kikuyu" ? " selected" : "") + ">Kikuyu</option>";
+  html += String("<option value='kalenjin'") + (language == "kalenjin" ? " selected" : "") + ">Kalenjin</option></select></form>";
 
   html += "<div class='box'><h2>" + translate("sensor_readings") + "</h2>";
   html += "<p><b>" + translate("soil_moisture") + ":</b> " + String(moisturePercent) + " %</p>";
   html += "<p><b>" + translate("temperature") + ":</b> " + String(temperature) + " °C</p>";
   html += "<p><b>" + translate("humidity") + ":</b> " + String(humidity) + " %</p>";
-  html += "<p><b>" + translate("pump_status") + ":</b> " + String(digitalRead(PUMP_PIN)==LOW ? translate("off") : translate("on")) + "</p>";
+  html += "<p><b>" + translate("pump_status") + ":</b> " + String(digitalRead(PUMP_PIN) == LOW ? translate("off") : translate("on")) + "</p>";
+  html += "<p><b>" + translate("ldr1") + ":</b> " + String(ldr1Val) + "</p>";
+  html += "<p><b>" + translate("ldr2") + ":</b> " + String(ldr2Val) + "</p>";
   html += "<button onclick='location.reload()' class='btn'>🔄 Refresh</button></div>";
 
   html += "<div class='box'><h2>🌍 " + translate("tips") + "</h2><p style='text-align:left;'>" + translate("tip_text") + "</p></div>";
@@ -122,10 +148,20 @@ void handleRoot() {
 
 void setup() {
   Serial.begin(9600);
-  pinMode(PUMP_PIN, OUTPUT); digitalWrite(PUMP_PIN, HIGH);
-  pinMode(LDR1_PIN, INPUT); pinMode(LDR2_PIN, INPUT);
-  servo.attach(SERVO_PIN); servo.write(90);
+  pinMode(PUMP_PIN, OUTPUT);
+  digitalWrite(PUMP_PIN, HIGH);
+  pinMode(LDR1_PIN, INPUT);
+  pinMode(LDR2_PIN, INPUT);
+  servo.attach(SERVO_PIN);
+  servo.write(90);
   dht.begin();
+
+  // === Initialize LCD ===
+  Wire.begin(2, 0); // SDA=D2, SCL=D1 (NodeMCU/ESP8266 typical)
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 0);
+  lcd.print("SmartFarm Ready");
 
   WiFi.softAP(ssid, password);
   server.on("/", handleRoot);
@@ -138,16 +174,42 @@ void loop() {
   moisturePercent = map(moistureRaw, 1024, 300, 0, 100);
   moisturePercent = constrain(moisturePercent, 0, 100);
 
-  digitalWrite(PUMP_PIN, moisturePercent < 20 ? HIGH : (moisturePercent > 60 ? LOW : digitalRead(PUMP_PIN)));
-
-  ldr1Val = digitalRead(LDR1_PIN);
-  ldr2Val = digitalRead(LDR2_PIN);
-  servo.write(ldr1Val==HIGH && ldr2Val==LOW ? 60 : (ldr2Val==HIGH && ldr1Val==LOW ? 120 : 90));
-
-  temperature = dht.readTemperature();
-  humidity = dht.readHumidity();
-  if (isnan(temperature) || isnan(humidity)) { temperature = 0; humidity = 0; }
-
-  server.handleClient();
+  if (moisturePercent < 20) {
+    digitalWrite(PUMP_PIN, HIGH);     // Turn on pump
+    servo.write(90);                  // Rotate servo
+  } else {
+    digitalWrite(PUMP_PIN, LOW);      // Turn off pump
+    servo.write(180);// Rotate back
+    delay(1000);
+    servo.write(0);// Rotate back
+    delay(1000);
+  }
   delay(2000);
+ 
+
+//digitalWrite(PUMP_PIN, moisturePercent < 20 ? HIGH : (moisturePercent > 55 ? LOW : digitalRead(PUMP_PIN)));
+
+//ldr1Val = digitalRead(LDR1_PIN);
+//ldr2Val = digitalRead(LDR2_PIN);
+//servo.write(ldr1Val==HIGH && ldr2Val==LOW ? 60 : (ldr2Val==HIGH && ldr1Val==LOW ? 120 : 90));
+
+temperature = dht.readTemperature();
+humidity = dht.readHumidity();
+if (isnan(temperature) || isnan(humidity)) {
+  temperature = 0;
+  humidity = 0;
+}
+
+// === Update LCD Display ===
+lcd.clear();
+lcd.setCursor(0, 0);
+lcd.print("M:" + String(moisturePercent) + "% ");
+lcd.print("T:" + String(temperature, 1) + "C");
+
+lcd.setCursor(0, 1);
+lcd.print("H:" + String(humidity, 1) + "% ");
+lcd.print(digitalRead(PUMP_PIN) == LOW ? "P:OFF" : "P:ON");
+
+server.handleClient();
+delay(2000);
 }
